@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
     telegram_chat_id: str = ""
+    # true = jawaban user diproses via long-polling (mode lokal / tanpa webhook)
+    telegram_polling_enabled: bool = False
 
     # Git providers
     gitlab_url: str = "https://git.dexagroup.com"

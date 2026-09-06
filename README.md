@@ -76,8 +76,9 @@ AZURE_OPENAI_API_KEY=sk-...
 AZURE_OPENAI_MODEL=deepseek-v4-flash
 
 # --- Telegram (opsional, untuk klarifikasi) ---
-TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_BOT_TOKEN=***
 TELEGRAM_CHAT_ID=123456789
+TELEGRAM_POLLING_ENABLED=false   # true = mode lokal (long-polling, tanpa webhook)
 
 # --- Git Provider ---
 GITLAB_URL=https://git.dexagroup.com
@@ -120,6 +121,16 @@ Tanpa Docker, jalankan tiga komponen berikut:
 | Nightshift worker | Memproses task dan workflow | `python -m nightshift.worker` |
 
 Redis tidak wajib untuk V1 dan tidak perlu dijalankan. Frontend juga tidak disediakan oleh repository ini; gunakan Swagger UI di `http://localhost:8000/docs` untuk pengujian API.
+
+### 4.0 Telegram klarifikasi: mode polling untuk local
+
+Saat Night Shift dijalankan di **local computer** (tanpa URL publik), webhook Telegram tidak bisa diterima karena Telegram membutuhkan HTTPS publik. Aktifkan mode long-polling:
+
+```ini
+TELEGRAM_POLLING_ENABLED=true
+```
+
+Dengan mode ini, proses API mengambil jawaban user via `getUpdates` (long-polling) dan memprosesnya dengan logika yang sama persis dengan webhook (`nightshift/integrations/telegram/hitl.py`). PENTING: jangan mendaftarkan webhook (`setWebhook`) selama mode polling aktif — keduanya bertabrakan; `deleteWebhook` untuk membersihkan.
 
 ### 4.1 Persiapan PostgreSQL lokal (Windows)
 

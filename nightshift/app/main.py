@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
@@ -19,9 +20,26 @@ async def lifespan(app: FastAPI):
     configure_logging(settings.log_level)
     ensure_directories(settings)
     logger.info("nightshift_startup")
+
+    # Local deployments behind NAT cannot receive Telegram webhooks; when
+    # polling is enabled we consume replies via long-polling instead.
+    poller_task: asyncio.Task | None = None
+    if settings.telegram_polling_enabled:
+        from nightshift.integrations.telegram.poller import create_poller
+
+        poller = create_poller(settings)
+        if poller is not None:
+            poller_task = asyncio.create_task(poller.run())
+
     yield
+
+    if poller_task is not None:
+        poller_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await poller_task
     logger.info("nightshift_shutdown")
-    await engine.dispose()
+    # dispose() is synchronous — awaiting it would raise at shutdown.
+    engine.dispose()
 
 
 def create_app() -> FastAPI:
