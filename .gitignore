@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+
+# Night Shift runtime
+/workspaces/
+/repos/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

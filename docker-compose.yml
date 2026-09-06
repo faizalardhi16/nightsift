@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nightshift
+      POSTGRES_PASSWORD: nightshift
+      POSTGRES_DB: nightshift
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nightshift"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nightshift-api:
+    build: .
+    command: uvicorn nightshift.app.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://nightshift:nightshift@postgres:5432/nightshift
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./workspaces:/workspaces
+      - ./repos:/repos
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nightshift-worker:
+    build: .
+    command: python -m nightshift.worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://nightshift:nightshift@postgres:5432/nightshift
+    volumes:
+      - ./workspaces:/workspaces
+      - ./repos:/repos
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Redis is optional in V1 (see PRD section 13).
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+
+volumes:
+  pgdata:
