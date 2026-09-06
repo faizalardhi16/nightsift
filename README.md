@@ -124,13 +124,67 @@ Redis tidak wajib untuk V1 dan tidak perlu dijalankan. Frontend juga tidak dised
 
 ### 4.0 Telegram klarifikasi: mode polling untuk local
 
-Saat Night Shift dijalankan di **local computer** (tanpa URL publik), webhook Telegram tidak bisa diterima karena Telegram membutuhkan HTTPS publik. Aktifkan mode long-polling:
+Saat Night Shift dijalankan di **local computer** (tanpa URL publik), webhook Telegram tidak bisa diterima karena Telegram membutuhkan HTTPS publik. Solusinya: **long-polling** — proses API menarik jawaban user via `getUpdates`, logika pemrosesan sama persis dengan webhook (`nightshift/integrations/telegram/hitl.py`).
+
+#### 4.0.1 Konfigurasi `.env`
+
+Pastikan `.env` berada di **working directory** saat menjalankan uvicorn (settings dibaca dari CWD):
 
 ```ini
+TELEGRAM_BOT_TOKEN=<token dari @BotFather>
+TELEGRAM_CHAT_ID=<chat ID kamu>
 TELEGRAM_POLLING_ENABLED=true
 ```
 
-Dengan mode ini, proses API mengambil jawaban user via `getUpdates` (long-polling) dan memprosesnya dengan logika yang sama persis dengan webhook (`nightshift/integrations/telegram/hitl.py`). PENTING: jangan mendaftarkan webhook (`setWebhook`) selama mode polling aktif — keduanya bertabrakan; `deleteWebhook` untuk membersihkan.
+#### 4.0.2 Bersihkan webhook lama (sekali saja)
+
+Kalau bot pernah pakai webhook, `getUpdates` akan gagal (konflik). Bersihkan:
+
+```powershell
+curl "https://api.telegram.org/bot<TOKEN>/deleteWebhook"
+```
+
+Verifikasi tidak ada update pending:
+
+```powershell
+curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
+# hasil: "pending_update_count": 0
+```
+
+> Jika ada `pending_update_count` > 0, jawaban lama bisa tertukar (contoh: `/start` ter-proses sebagai jawaban, bukan jawaban asli). Acknowledge dulu dengan `getUpdates?offset=<last_update_id+1>` lalu minta user jawab ulang.
+
+#### 4.0.3 Menjalankan
+
+Jalankan di **dua terminal terpisah**:
+
+```powershell
+# Terminal 1 — API (poller hidup di sini)
+cd <folder-project>
+.venv\Scripts\activate
+uvicorn nightshift.app.main:app
+# Log yang diharapkan: telegram_polling_started
+
+# Terminal 2 — Worker (proses workflow)
+cd <folder-project>
+.venv\Scripts\activate
+python -m nightshift.worker
+```
+
+Poller otomatis start/stop dari FastAPI lifespan saat `TELEGRAM_POLLING_ENABLED=true`.
+
+#### 4.0.4 Alur klarifikasi
+
+1. Worker mengirim pertanyaan ke Telegram (`request_clarification`) → task masuk `WAITING_USER`.
+2. User menjawab di DM bot → poller menarik jawaban → log `telegram_answer_applied` → workflow lanjut ke `REQUIREMENT_ANALYSIS`.
+
+#### 4.0.5 Troubleshooting
+
+| Gejala | Penyebab / Solusi |
+|---|---|
+| Log `telegram_polling_started` tidak muncul | `.env` tidak terbaca (CWD salah) / var belum di-set / API belum di-restart |
+| `telegram_polling_error` dengan `409 Conflict` | Webhook masih aktif (`deleteWebhook`) atau ada **lebih dari satu** proses uvicorn yang jalan |
+| Reply tidak memproses task | Cek `pending_update_count`; kalau > 0, jawaban lama tertukar — ikuti langkah 4.0.2 bagian pending |
+| Bot tidak bisa kirim pesan | User belum pernah menekan `/start` di bot tersebut |
 
 ### 4.1 Persiapan PostgreSQL lokal (Windows)
 
